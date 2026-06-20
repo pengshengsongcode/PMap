@@ -9,7 +9,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
-import { CSSProperties, FormEvent, KeyboardEvent, PointerEvent, useRef, useState } from 'react';
+import { CSSProperties, FormEvent, KeyboardEvent, PointerEvent, TouchEvent, useRef, useState } from 'react';
 import { formatLineDirection, lineKey } from '../domain/transit';
 import type { AsyncState, BusLineSummary, LineLoadState, StationCandidate } from '../types/transit';
 
@@ -17,6 +17,7 @@ const MOBILE_SHEET_MIN_HEIGHT = 16;
 const MOBILE_SHEET_DEFAULT_HEIGHT = 68;
 const MOBILE_SHEET_MAX_HEIGHT = 92;
 const MOBILE_SHEET_SNAP_POINTS = [18, 68, 92];
+const SHEET_DRAG_THRESHOLD_PX = 8;
 
 interface TransitPanelProps {
   city: string;
@@ -72,43 +73,116 @@ export function TransitPanel({
   const canShowAll = lines.length > 0 && !isShowingAll;
   const [sheetHeight, setSheetHeight] = useState(MOBILE_SHEET_DEFAULT_HEIGHT);
   const [isDraggingSheet, setIsDraggingSheet] = useState(false);
-  const dragStartRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
+  const suppressNextClickRef = useRef(false);
+  const dragStartRef = useRef<{
+    pointerId?: number;
+    startY: number;
+    lastY: number;
+    startHeight: number;
+    dragging: boolean;
+    scrollTarget: HTMLElement | null;
+  } | null>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (canSearch) onSearch();
   }
 
-  function handleSheetPointerDown(event: PointerEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    dragStartRef.current = {
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      startHeight: sheetHeight,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setIsDraggingSheet(true);
+  function handlePanelPointerDown(event: PointerEvent<HTMLElement>) {
+    if (!isMobileViewport() || (event.pointerType === 'mouse' && event.button !== 0)) return;
+
+    beginSheetDrag(event.clientY, event.currentTarget, event.target, event.pointerId);
+    if (event.pointerId !== undefined) {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
   }
 
-  function handleSheetPointerMove(event: PointerEvent<HTMLButtonElement>) {
+  function handlePanelPointerMove(event: PointerEvent<HTMLElement>) {
     const dragStart = dragStartRef.current;
-    if (!dragStart || dragStart.pointerId !== event.pointerId) return;
+    if (!dragStart || !isSamePointer(dragStart.pointerId, event.pointerId)) return;
 
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
-    const deltaHeight = ((dragStart.startY - event.clientY) / viewportHeight) * 100;
-    setSheetHeight(clamp(dragStart.startHeight + deltaHeight, MOBILE_SHEET_MIN_HEIGHT, MOBILE_SHEET_MAX_HEIGHT));
+    updateSheetDrag(event.clientY, event);
   }
 
-  function handleSheetPointerEnd(event: PointerEvent<HTMLButtonElement>) {
+  function handlePanelPointerEnd(event: PointerEvent<HTMLElement>) {
     const dragStart = dragStartRef.current;
-    if (!dragStart || dragStart.pointerId !== event.pointerId) return;
+    if (!dragStart || !isSamePointer(dragStart.pointerId, event.pointerId)) return;
 
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+    if (event.pointerId !== undefined && event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     }
+    finishSheetDrag();
+  }
+
+  function handlePanelTouchStart(event: TouchEvent<HTMLElement>) {
+    if (!isMobileViewport() || event.touches.length !== 1) return;
+    beginSheetDrag(event.touches[0].clientY, event.currentTarget, event.target);
+  }
+
+  function handlePanelTouchMove(event: TouchEvent<HTMLElement>) {
+    if (!dragStartRef.current || event.touches.length !== 1) return;
+    updateSheetDrag(event.touches[0].clientY, event);
+  }
+
+  function handlePanelTouchEnd() {
+    if (!dragStartRef.current) return;
+    finishSheetDrag();
+  }
+
+  function beginSheetDrag(clientY: number, panel: EventTarget, target: EventTarget, pointerId?: number) {
+    dragStartRef.current = {
+      pointerId,
+      startY: clientY,
+      lastY: clientY,
+      startHeight: sheetHeight,
+      dragging: false,
+      scrollTarget: findScrollableTarget(panel, target, scrollAreaRef.current),
+    };
+  }
+
+  function updateSheetDrag(clientY: number, event: { preventDefault: () => void }) {
+    const dragStart = dragStartRef.current;
+    if (!dragStart) return;
+
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
+    const totalDeltaY = clientY - dragStart.startY;
+    const stepDeltaY = clientY - dragStart.lastY;
+    const nextRawHeight = dragStart.startHeight - (totalDeltaY / viewportHeight) * 100;
+    const nextHeight = clamp(nextRawHeight, MOBILE_SHEET_MIN_HEIGHT, MOBILE_SHEET_MAX_HEIGHT);
+
+    if (!dragStart.dragging && Math.abs(totalDeltaY) >= SHEET_DRAG_THRESHOLD_PX) {
+      dragStart.dragging = true;
+      suppressNextClickRef.current = true;
+      setIsDraggingSheet(true);
+    }
+
+    if (!dragStart.dragging) return;
+
+    event.preventDefault();
+    setSheetHeight(nextHeight);
+
+    if (nextRawHeight > MOBILE_SHEET_MAX_HEIGHT && stepDeltaY < 0) {
+      dragStart.scrollTarget?.scrollBy?.({ top: -stepDeltaY });
+    }
+    if (nextRawHeight < MOBILE_SHEET_MIN_HEIGHT && stepDeltaY > 0) {
+      dragStart.scrollTarget?.scrollBy?.({ top: -stepDeltaY });
+    }
+
+    dragStart.lastY = clientY;
+  }
+
+  function finishSheetDrag() {
     dragStartRef.current = null;
     setSheetHeight((currentHeight) => nearestSnapPoint(currentHeight));
     setIsDraggingSheet(false);
+  }
+
+  function handlePanelClickCapture(event: React.MouseEvent<HTMLElement>) {
+    if (!suppressNextClickRef.current) return;
+    suppressNextClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   function handleSheetKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -139,154 +213,161 @@ export function TransitPanel({
       className={`transit-panel ${isDraggingSheet ? 'is-dragging' : ''}`}
       aria-label="公交站牌线路查询"
       style={panelStyle}
+      onPointerDown={handlePanelPointerDown}
+      onPointerMove={handlePanelPointerMove}
+      onPointerUp={handlePanelPointerEnd}
+      onPointerCancel={handlePanelPointerEnd}
+      onTouchStart={handlePanelTouchStart}
+      onTouchMove={handlePanelTouchMove}
+      onTouchEnd={handlePanelTouchEnd}
+      onTouchCancel={handlePanelTouchEnd}
+      onClickCapture={handlePanelClickCapture}
     >
       <button
         className="sheet-drag-handle"
         type="button"
         title="拖拽面板"
         aria-label="上下拖拽面板"
-        onPointerDown={handleSheetPointerDown}
-        onPointerMove={handleSheetPointerMove}
-        onPointerUp={handleSheetPointerEnd}
-        onPointerCancel={handleSheetPointerEnd}
         onKeyDown={handleSheetKeyDown}
       >
         <span />
       </button>
 
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">{city}</p>
-          <h1>公交站牌直达线路</h1>
-        </div>
-        <button className="icon-button" type="button" onClick={onClear} title="清空图层" aria-label="清空图层">
-          <Trash2 size={18} />
-        </button>
-      </div>
-
-      <form className="search-form" onSubmit={handleSubmit}>
-        <label htmlFor="station-query">公交站</label>
-        <div className="search-row">
-          <input
-            id="station-query"
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="例如：东直门"
-            autoComplete="off"
-          />
-          <button type="submit" disabled={!canSearch} title="搜索公交站">
-            {isSearching ? <LoaderCircle className="spin" size={18} /> : <Search size={18} />}
-            <span>搜索</span>
-          </button>
-        </div>
-      </form>
-
-      <button className="locate-button" type="button" onClick={onLocate} disabled={!canUseLocate} title="定位最近公交站">
-        {isLocating ? <LoaderCircle className="spin" size={18} /> : <LocateFixed size={18} />}
-        <span>{isLocating ? '定位中' : '定位最近站'}</span>
-      </button>
-
-      {!isConfigured && (
-        <StatusMessage tone="warning" icon={<AlertCircle size={18} />}>
-          缺少高德 Key。请在 `.env.local` 中配置 `VITE_AMAP_KEY` 和 `VITE_AMAP_SECURITY_JS_CODE`。
-        </StatusMessage>
-      )}
-
-      {locateState === 'error' && (
-        <StatusMessage tone="danger" icon={<AlertCircle size={18} />}>
-          {locateError}
-        </StatusMessage>
-      )}
-
-      {searchState === 'error' && (
-        <StatusMessage tone="danger" icon={<AlertCircle size={18} />}>
-          {searchError}
-        </StatusMessage>
-      )}
-
-      {searchState === 'success' && stations.length === 0 && (
-        <StatusMessage tone="muted" icon={<MapPin size={18} />}>
-          没有找到匹配站点。
-        </StatusMessage>
-      )}
-
-      {stations.length > 0 && (
-        <section className="panel-section">
-          <div className="section-title">
-            <MapPin size={16} />
-            <span>站点候选</span>
+      <div className="panel-scroll-area" ref={scrollAreaRef}>
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">{city}</p>
+            <h1>公交站牌直达线路</h1>
           </div>
-          <div className="station-list">
-            {stations.map((station) => (
-              <button
-                className={`station-item ${selectedStation?.id === station.id ? 'active' : ''}`}
-                type="button"
-                key={station.id || `${station.name}-${station.location?.join(',')}`}
-                onClick={() => onSelectStation(station)}
-              >
-                <span>{station.name}</span>
-                <small>
-                  {station.buslines.length} 条线路
-                  {station.adcode ? ` · ${station.adcode}` : ''}
-                </small>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="panel-section route-section">
-        <div className="section-title">
-          <Bus size={16} />
-          <span>{selectedStation ? `${selectedStation.name} 途经线路` : '途经线路'}</span>
-        </div>
-
-        <div className="action-row">
-          <button type="button" onClick={onShowAll} disabled={!canShowAll} title="显示全部线路">
-            {isShowingAll ? <LoaderCircle className="spin" size={18} /> : <Layers size={18} />}
-            <span>{isShowingAll ? '绘制中' : '显示全部'}</span>
-          </button>
-          <button type="button" className="secondary" onClick={onClear} title="清空图层">
+          <button className="icon-button" type="button" onClick={onClear} title="清空图层" aria-label="清空图层">
             <Trash2 size={18} />
-            <span>清空</span>
           </button>
         </div>
 
-        {selectedStation && lines.length === 0 && (
-          <StatusMessage tone="muted" icon={<Route size={18} />}>
-            该站点未返回地面公交线路。
-          </StatusMessage>
-        )}
-
-        {!selectedStation && (
-          <StatusMessage tone="muted" icon={<Route size={18} />}>
-            请选择一个公交站。
-          </StatusMessage>
-        )}
-
-        {lines.length > 0 && (
-          <div className="line-list">
-            {lines.map((line) => {
-              const key = lineKey(line);
-              const state = lineStates[key]?.status ?? 'idle';
-              const isActive = activeLineKey === key;
-              return (
-                <button
-                  className={`line-item ${isActive ? 'active' : ''}`}
-                  type="button"
-                  key={key}
-                  onClick={() => onSelectLine(line)}
-                  aria-pressed={isActive}
-                >
-                  <span className="line-badge">{line.name.replace(/[（(].*$/, '')}</span>
-                  <span className="line-meta">{formatLineDirection(line)}</span>
-                  <LineStateLabel state={state} message={lineStates[key]?.message} />
-                </button>
-              );
-            })}
+        <form className="search-form" onSubmit={handleSubmit}>
+          <label htmlFor="station-query">公交站</label>
+          <div className="search-row">
+            <input
+              id="station-query"
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="例如：东直门 / 人民广场"
+              autoComplete="off"
+            />
+            <button type="submit" disabled={!canSearch} title="搜索公交站">
+              {isSearching ? <LoaderCircle className="spin" size={18} /> : <Search size={18} />}
+              <span>搜索</span>
+            </button>
           </div>
+        </form>
+
+        <button className="locate-button" type="button" onClick={onLocate} disabled={!canUseLocate} title="定位最近公交站">
+          {isLocating ? <LoaderCircle className="spin" size={18} /> : <LocateFixed size={18} />}
+          <span>{isLocating ? '定位中' : '定位最近站'}</span>
+        </button>
+
+        {!isConfigured && (
+          <StatusMessage tone="warning" icon={<AlertCircle size={18} />}>
+            缺少高德 Key。请在 `.env.local` 中配置 `VITE_AMAP_KEY` 和 `VITE_AMAP_SECURITY_JS_CODE`。
+          </StatusMessage>
         )}
-      </section>
+
+        {locateState === 'error' && (
+          <StatusMessage tone="danger" icon={<AlertCircle size={18} />}>
+            {locateError}
+          </StatusMessage>
+        )}
+
+        {searchState === 'error' && (
+          <StatusMessage tone="danger" icon={<AlertCircle size={18} />}>
+            {searchError}
+          </StatusMessage>
+        )}
+
+        {searchState === 'success' && stations.length === 0 && (
+          <StatusMessage tone="muted" icon={<MapPin size={18} />}>
+            没有找到匹配站点。
+          </StatusMessage>
+        )}
+
+        {stations.length > 0 && (
+          <section className="panel-section">
+            <div className="section-title">
+              <MapPin size={16} />
+              <span>站点候选</span>
+            </div>
+            <div className="station-list">
+              {stations.map((station) => (
+                <button
+                  className={`station-item ${selectedStation?.id === station.id ? 'active' : ''}`}
+                  type="button"
+                  key={station.id || `${station.name}-${station.location?.join(',')}`}
+                  onClick={() => onSelectStation(station)}
+                >
+                  <span>{station.name}</span>
+                  <small>
+                    {station.buslines.length} 条线路
+                    {station.adcode ? ` · ${station.adcode}` : ''}
+                  </small>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="panel-section route-section">
+          <div className="section-title">
+            <Bus size={16} />
+            <span>{selectedStation ? `${selectedStation.name} 途经线路` : '途经线路'}</span>
+          </div>
+
+          <div className="action-row">
+            <button type="button" onClick={onShowAll} disabled={!canShowAll} title="显示全部线路">
+              {isShowingAll ? <LoaderCircle className="spin" size={18} /> : <Layers size={18} />}
+              <span>{isShowingAll ? '绘制中' : '显示全部'}</span>
+            </button>
+            <button type="button" className="secondary" onClick={onClear} title="清空图层">
+              <Trash2 size={18} />
+              <span>清空</span>
+            </button>
+          </div>
+
+          {selectedStation && lines.length === 0 && (
+            <StatusMessage tone="muted" icon={<Route size={18} />}>
+              该站点未返回地面公交线路。
+            </StatusMessage>
+          )}
+
+          {!selectedStation && (
+            <StatusMessage tone="muted" icon={<Route size={18} />}>
+              请选择一个公交站。
+            </StatusMessage>
+          )}
+
+          {lines.length > 0 && (
+            <div className="line-list">
+              {lines.map((line) => {
+                const key = lineKey(line);
+                const state = lineStates[key]?.status ?? 'idle';
+                const isActive = activeLineKey === key;
+                return (
+                  <button
+                    className={`line-item ${isActive ? 'active' : ''}`}
+                    type="button"
+                    key={key}
+                    onClick={() => onSelectLine(line)}
+                    aria-pressed={isActive}
+                  >
+                    <span className="line-badge">{line.name.replace(/[（(].*$/, '')}</span>
+                    <span className="line-meta">{formatLineDirection(line)}</span>
+                    <LineStateLabel state={state} message={lineStates[key]?.message} />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
     </aside>
   );
 }
@@ -331,4 +412,33 @@ function nearestSnapPoint(value: number): number {
   return MOBILE_SHEET_SNAP_POINTS.reduce((nearest, point) => {
     return Math.abs(point - value) < Math.abs(nearest - value) ? point : nearest;
   }, MOBILE_SHEET_SNAP_POINTS[0]);
+}
+
+function isMobileViewport(): boolean {
+  return window.matchMedia?.('(max-width: 720px)').matches ?? window.innerWidth <= 720;
+}
+
+function isSamePointer(startPointerId: number | undefined, eventPointerId: number | undefined): boolean {
+  return startPointerId === undefined || eventPointerId === undefined || startPointerId === eventPointerId;
+}
+
+function findScrollableTarget(
+  panelTarget: EventTarget,
+  eventTarget: EventTarget,
+  fallback: HTMLElement | null,
+): HTMLElement | null {
+  if (!(panelTarget instanceof HTMLElement) || !(eventTarget instanceof HTMLElement)) return fallback;
+
+  let current: HTMLElement | null = eventTarget;
+  while (current && current !== panelTarget) {
+    if (isVerticallyScrollable(current)) return current;
+    current = current.parentElement;
+  }
+
+  return fallback;
+}
+
+function isVerticallyScrollable(element: HTMLElement): boolean {
+  const overflowY = window.getComputedStyle(element).overflowY;
+  return /(auto|scroll)/.test(overflowY) && element.scrollHeight > element.clientHeight;
 }

@@ -22,24 +22,25 @@ export interface TransitSearchService {
 }
 
 export function createAmapTransitService(amap: AmapGlobal, city: string): TransitSearchService {
+  const cityOptions = city ? { city } : {};
   const stationSearch = new amap.StationSearch({
     pageIndex: 1,
     pageSize: 50,
-    city,
+    ...cityOptions,
   });
 
   const lineSearch = new amap.LineSearch({
     pageIndex: 1,
     pageSize: 20,
-    city,
     extensions: 'all',
+    ...cityOptions,
   });
 
   const placeSearch = new amap.PlaceSearch({
     pageIndex: 1,
     pageSize: 20,
-    city,
     type: '公交车站',
+    ...cityOptions,
   });
 
   const lineCache = new Map<string, BusLineDetail>();

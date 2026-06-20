@@ -16,8 +16,8 @@ import './styles.css';
 
 const AMAP_KEY = import.meta.env.VITE_AMAP_KEY?.trim() ?? '';
 const AMAP_SECURITY_JS_CODE = import.meta.env.VITE_AMAP_SECURITY_JS_CODE?.trim() ?? '';
-const AMAP_CITY = import.meta.env.VITE_AMAP_CITY?.trim() || '北京';
-const DEFAULT_BEIJING_CENTER: LngLatTuple = [116.397428, 39.90923];
+const AMAP_CITY = import.meta.env.VITE_AMAP_CITY?.trim() ?? '';
+const DEFAULT_CHINA_CENTER: LngLatTuple = [104.195397, 35.86166];
 const SHOW_ALL_LIMIT = 50;
 const SHOW_ALL_CONCURRENCY = 3;
 const NEARBY_STATION_RADIUS_METERS = 1500;
@@ -65,7 +65,7 @@ export default function App() {
         amapRef.current = amap;
         const map = new amap.Map(mapContainerRef.current, {
           zoom: 12,
-          center: DEFAULT_BEIJING_CENTER,
+          center: DEFAULT_CHINA_CENTER,
           viewMode: '2D',
           resizeEnable: true,
         });
@@ -238,7 +238,7 @@ export default function App() {
         {mapState === 'error' && <MapOverlayMessage title="地图加载失败" message={mapError} />}
       </div>
       <TransitPanel
-        city={AMAP_CITY}
+        city={AMAP_CITY || '全国'}
         isConfigured={isConfigured}
         query={query}
         searchState={searchState}

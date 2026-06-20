@@ -98,6 +98,15 @@ button:disabled {
   display: none;
 }
 
+.panel-scroll-area {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
 .panel-header {
   display: flex;
   align-items: flex-start;
@@ -425,6 +434,7 @@ button:disabled {
     border-bottom-left-radius: 0;
     transition: height 180ms ease;
     overscroll-behavior: contain;
+    touch-action: none;
   }
 
   .transit-panel.is-dragging {
@@ -442,6 +452,14 @@ button:disabled {
     color: transparent;
     background: transparent;
     touch-action: none;
+  }
+
+  .panel-scroll-area {
+    gap: 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .sheet-drag-handle span {

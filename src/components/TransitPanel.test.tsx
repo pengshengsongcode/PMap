@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TransitPanel } from './TransitPanel';
 import type { BusLineSummary, StationCandidate } from '../types/transit';
 
@@ -57,6 +57,23 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof TransitPanel
 }
 
 describe('TransitPanel', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+    Object.defineProperty(window, 'matchMedia', {
+      value: vi.fn(() => ({
+        matches: true,
+        media: '(max-width: 720px)',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+      configurable: true,
+    });
+  });
+
   it('shows missing key guidance', () => {
     renderPanel({ isConfigured: false, canLocate: false });
     expect(screen.getByText(/缺少高德 Key/)).toBeInTheDocument();
@@ -126,22 +143,11 @@ describe('TransitPanel', () => {
     Object.defineProperty(window, 'innerHeight', { value: 1000, configurable: true });
     renderPanel();
     const panel = screen.getByLabelText('公交站牌线路查询') as HTMLElement;
-    const handle = screen.getByLabelText('上下拖拽面板') as HTMLButtonElement & {
-      setPointerCapture: ReturnType<typeof vi.fn>;
-      hasPointerCapture: ReturnType<typeof vi.fn>;
-      releasePointerCapture: ReturnType<typeof vi.fn>;
-    };
 
-    handle.setPointerCapture = vi.fn();
-    handle.hasPointerCapture = vi.fn(() => true);
-    handle.releasePointerCapture = vi.fn();
-
-    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 800 });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 500 });
-    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 500 });
+    fireEvent.touchStart(panel, { touches: [{ clientY: 500 }] });
+    fireEvent.touchMove(panel, { touches: [{ clientY: 800 }] });
+    fireEvent.touchEnd(panel);
 
     expect(panel.style.getPropertyValue('--sheet-height')).toBe('18dvh');
-    expect(handle.setPointerCapture).toHaveBeenCalled();
-    expect(handle.releasePointerCapture).toHaveBeenCalled();
   });
 });
