@@ -68,6 +68,7 @@ export default function App() {
           center: DEFAULT_CHINA_CENTER,
           viewMode: '2D',
           resizeEnable: true,
+          mapStyle: 'amap://styles/darkblue',
         });
 
         if (amap.Scale) map.addControl?.(new amap.Scale());
@@ -325,11 +326,11 @@ function drawLineDetail(
     map,
     path: detail.path,
     strokeColor: detail.color,
-    strokeOpacity: options.emphasis ? 0.94 : 0.56,
-    strokeWeight: options.emphasis ? 8 : 4,
+    strokeOpacity: options.emphasis ? 0.98 : 0.66,
+    strokeWeight: options.emphasis ? 9 : 5,
     isOutline: true,
-    outlineColor: '#ffffff',
-    borderWeight: options.emphasis ? 3 : 1,
+    outlineColor: options.emphasis ? '#4eefff' : '#07101a',
+    borderWeight: options.emphasis ? 4 : 2,
     zIndex: options.emphasis ? 52 : 36,
   });
   layers.route.push(polyline);
