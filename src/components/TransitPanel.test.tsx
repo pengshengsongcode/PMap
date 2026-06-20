@@ -168,6 +168,42 @@ describe('TransitPanel', () => {
     expect(panel.style.getPropertyValue('--sheet-height')).toBe('18dvh');
   });
 
+  it('scrolls panel content before shrinking the expanded sheet on downward drag', () => {
+    Object.defineProperty(window, 'innerHeight', { value: 1000, configurable: true });
+    renderPanel({ selectedStation: stations[0], lines });
+    const panel = screen.getByLabelText('公交站牌线路查询') as HTMLElement;
+    const handle = screen.getByLabelText('上下拖拽面板');
+    const scrollArea = panel.querySelector('.panel-scroll-area') as HTMLElement;
+
+    fireEvent.keyDown(handle, { key: 'End' });
+    makeScrollable(scrollArea, { scrollTop: 200 });
+
+    fireEvent.touchStart(panel, { touches: [{ clientY: 500 }] });
+    fireEvent.touchMove(panel, { touches: [{ clientY: 580 }] });
+    fireEvent.touchEnd(panel);
+
+    expect(scrollArea.scrollTop).toBe(120);
+    expect(panel.style.getPropertyValue('--sheet-height')).toBe('92dvh');
+  });
+
+  it('shrinks the expanded sheet when panel content is already at the top', () => {
+    Object.defineProperty(window, 'innerHeight', { value: 1000, configurable: true });
+    renderPanel({ selectedStation: stations[0], lines });
+    const panel = screen.getByLabelText('公交站牌线路查询') as HTMLElement;
+    const handle = screen.getByLabelText('上下拖拽面板');
+    const scrollArea = panel.querySelector('.panel-scroll-area') as HTMLElement;
+
+    fireEvent.keyDown(handle, { key: 'End' });
+    makeScrollable(scrollArea, { scrollTop: 0 });
+
+    fireEvent.touchStart(panel, { touches: [{ clientY: 500 }] });
+    fireEvent.touchMove(panel, { touches: [{ clientY: 720 }] });
+    fireEvent.touchEnd(panel);
+
+    expect(scrollArea.scrollTop).toBe(0);
+    expect(panel.style.getPropertyValue('--sheet-height')).toBe('68dvh');
+  });
+
   it('collapses the sheet when showing all lines', () => {
     const { props } = renderPanel({ selectedStation: stations[0], lines });
     const panel = screen.getByLabelText('公交站牌线路查询') as HTMLElement;
@@ -182,3 +218,9 @@ describe('TransitPanel', () => {
     expect(props.onShowAll).toHaveBeenCalledTimes(1);
   });
 });
+
+function makeScrollable(element: HTMLElement, { scrollTop }: { scrollTop: number }) {
+  Object.defineProperty(element, 'scrollHeight', { value: 1200, configurable: true });
+  Object.defineProperty(element, 'clientHeight', { value: 500, configurable: true });
+  element.scrollTop = scrollTop;
+}

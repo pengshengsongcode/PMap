@@ -85,7 +85,7 @@ export function TransitPanel({
     pointerId?: number;
     startY: number;
     lastY: number;
-    startHeight: number;
+    currentHeight: number;
     dragging: boolean;
     scrollTarget: HTMLElement | null;
   } | null>(null);
@@ -152,7 +152,7 @@ export function TransitPanel({
       pointerId,
       startY: clientY,
       lastY: clientY,
-      startHeight: sheetHeight,
+      currentHeight: sheetHeight,
       dragging: false,
       scrollTarget: findScrollableTarget(panel, target, scrollAreaRef.current),
     };
@@ -165,8 +165,6 @@ export function TransitPanel({
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
     const totalDeltaY = clientY - dragStart.startY;
     const stepDeltaY = clientY - dragStart.lastY;
-    const nextRawHeight = dragStart.startHeight - (totalDeltaY / viewportHeight) * 100;
-    const nextHeight = clamp(nextRawHeight, MOBILE_SHEET_MIN_HEIGHT, MOBILE_SHEET_MAX_HEIGHT);
 
     if (!dragStart.dragging && Math.abs(totalDeltaY) >= SHEET_DRAG_THRESHOLD_PX) {
       dragStart.dragging = true;
@@ -177,13 +175,24 @@ export function TransitPanel({
     if (!dragStart.dragging) return;
 
     event.preventDefault();
-    setSheetHeight(nextHeight);
 
-    if (nextRawHeight > MOBILE_SHEET_MAX_HEIGHT && stepDeltaY < 0) {
-      dragStart.scrollTarget?.scrollBy?.({ top: -stepDeltaY });
+    if (stepDeltaY > 0 && canScrollTowardTop(dragStart.scrollTarget)) {
+      scrollElementBy(dragStart.scrollTarget, -stepDeltaY);
+      dragStart.lastY = clientY;
+      return;
+    }
+
+    const nextRawHeight = dragStart.currentHeight - (stepDeltaY / viewportHeight) * 100;
+    const nextHeight = clamp(nextRawHeight, MOBILE_SHEET_MIN_HEIGHT, MOBILE_SHEET_MAX_HEIGHT);
+    setSheetHeight(nextHeight);
+    dragStart.currentHeight = nextHeight;
+
+    if (nextRawHeight > MOBILE_SHEET_MAX_HEIGHT && stepDeltaY < 0 && canScrollTowardBottom(dragStart.scrollTarget)) {
+      const overflowPixels = ((nextRawHeight - MOBILE_SHEET_MAX_HEIGHT) / 100) * viewportHeight;
+      scrollElementBy(dragStart.scrollTarget, overflowPixels);
     }
     if (nextRawHeight < MOBILE_SHEET_MIN_HEIGHT && stepDeltaY > 0) {
-      dragStart.scrollTarget?.scrollBy?.({ top: -stepDeltaY });
+      scrollElementBy(dragStart.scrollTarget, -stepDeltaY);
     }
 
     dragStart.lastY = clientY;
@@ -481,4 +490,21 @@ function findScrollableTarget(
 function isVerticallyScrollable(element: HTMLElement): boolean {
   const overflowY = window.getComputedStyle(element).overflowY;
   return /(auto|scroll)/.test(overflowY) && element.scrollHeight > element.clientHeight;
+}
+
+function canScrollTowardTop(element: HTMLElement | null): boolean {
+  return Boolean(element && element.scrollTop > 0);
+}
+
+function canScrollTowardBottom(element: HTMLElement | null): boolean {
+  if (!element) return false;
+  return element.scrollTop + element.clientHeight < element.scrollHeight - 1;
+}
+
+function scrollElementBy(element: HTMLElement | null, top: number) {
+  if (!element || top === 0) return;
+  const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+  const nextScrollTop = clamp(element.scrollTop + top, 0, maxScrollTop);
+
+  element.scrollTop = nextScrollTop;
 }
