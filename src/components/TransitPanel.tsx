@@ -7,7 +7,6 @@ import {
   MapPin,
   Route,
   Search,
-  Trash2,
 } from 'lucide-react';
 import { CSSProperties, FormEvent, KeyboardEvent, PointerEvent, TouchEvent, useRef, useState } from 'react';
 import { formatLineDirection, lineKey } from '../domain/transit';
@@ -40,7 +39,6 @@ interface TransitPanelProps {
   onSelectStation: (station: StationCandidate) => void;
   onSelectLine: (line: BusLineSummary) => void;
   onShowAll: () => void;
-  onClear: () => void;
 }
 
 export function TransitPanel({
@@ -64,7 +62,6 @@ export function TransitPanel({
   onSelectStation,
   onSelectLine,
   onShowAll,
-  onClear,
 }: TransitPanelProps) {
   const isSearching = searchState === 'loading';
   const isLocating = locateState === 'loading';
@@ -235,23 +232,24 @@ export function TransitPanel({
 
       <div className="panel-scroll-area" ref={scrollAreaRef}>
         <div className="panel-header">
-          <div>
-            <p className="eyebrow">{city}</p>
-            <h1>公交站牌直达线路</h1>
+          <div className="panel-title">
+            <p className="eyebrow">PMap · {city}</p>
+            <h1>公交直达</h1>
           </div>
-          <button className="icon-button" type="button" onClick={onClear} title="清空图层" aria-label="清空图层">
-            <Trash2 size={18} />
-          </button>
+          <div className="route-counter" aria-label={`当前站点 ${lines.length} 条线路`}>
+            <strong>{lines.length}</strong>
+            <span>线路</span>
+          </div>
         </div>
 
         <form className="search-form" onSubmit={handleSubmit}>
-          <label htmlFor="station-query">公交站</label>
+          <label htmlFor="station-query">搜索站牌</label>
           <div className="search-row">
             <input
               id="station-query"
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="例如：东直门 / 人民广场"
+              placeholder="输入公交站名"
               autoComplete="off"
             />
             <button type="submit" disabled={!canSearch} title="搜索公交站">
@@ -290,6 +288,14 @@ export function TransitPanel({
           </StatusMessage>
         )}
 
+        {selectedStation && (
+          <section className="current-station" aria-label="当前站点">
+            <span>当前站点</span>
+            <strong>{selectedStation.name}</strong>
+            <small>{lines.length} 条可直达线路</small>
+          </section>
+        )}
+
         {stations.length > 0 && (
           <section className="panel-section">
             <div className="section-title">
@@ -318,17 +324,14 @@ export function TransitPanel({
         <section className="panel-section route-section">
           <div className="section-title">
             <Bus size={16} />
-            <span>{selectedStation ? `${selectedStation.name} 途经线路` : '途经线路'}</span>
+            <span>可直达线路</span>
           </div>
 
           <div className="action-row">
-            <button type="button" onClick={onShowAll} disabled={!canShowAll} title="显示全部线路">
+            <button className="show-all-button" type="button" onClick={onShowAll} disabled={!canShowAll} title="显示全部线路">
               {isShowingAll ? <LoaderCircle className="spin" size={18} /> : <Layers size={18} />}
               <span>{isShowingAll ? '绘制中' : '显示全部'}</span>
-            </button>
-            <button type="button" className="secondary" onClick={onClear} title="清空图层">
-              <Trash2 size={18} />
-              <span>清空</span>
+              <small>{lines.length > 0 ? `${lines.length} 条线路` : '选择站点后可用'}</small>
             </button>
           </div>
 

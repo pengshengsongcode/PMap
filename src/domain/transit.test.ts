@@ -4,6 +4,7 @@ import {
   isGroundBusType,
   normalizeLineDetail,
   normalizeStation,
+  normalizeStationsFromResult,
   parsePath,
 } from './transit';
 
@@ -57,8 +58,40 @@ describe('transit domain helpers', () => {
   it('filters non-ground transit types', () => {
     expect(isGroundBusType('普通公交')).toBe(true);
     expect(isGroundBusType('机场大巴')).toBe(true);
+    expect(isGroundBusType('首都机场线')).toBe(false);
     expect(isGroundBusType('地铁')).toBe(false);
     expect(isGroundBusType('磁悬浮列车')).toBe(false);
+  });
+
+  it('keeps station candidates focused on ground bus stops', () => {
+    const stations = normalizeStationsFromResult({
+      stationInfo: [
+        {
+          id: 'M1',
+          name: '东直门(地铁站)',
+          location: '116.433,39.941',
+          buslines: [{ id: 'A1', name: '首都机场线', start_stop: '3号航站楼', end_stop: '北新桥' }],
+        },
+        {
+          id: 'B1',
+          name: '东直门枢纽站(公交站)',
+          location: '116.434,39.942',
+          buslines: [
+            { id: 'L1', name: '24路', start_stop: '左家庄', end_stop: '北京站' },
+            { id: 'L2', name: '117路', start_stop: '红庙路口东', end_stop: '五路居' },
+          ],
+        },
+        {
+          id: 'E1',
+          name: '东直门地铁站A西北口',
+          location: '116.435,39.943',
+          buslines: [],
+        },
+      ],
+    });
+
+    expect(stations.map((station) => station.name)).toEqual(['东直门枢纽站(公交站)']);
+    expect(stations[0].buslines.map((line) => line.name)).toEqual(['24路', '117路']);
   });
 
   it('maps AMap statuses to user-facing messages', () => {

@@ -222,15 +222,6 @@ export default function App() {
     setIsShowingAll(false);
   }, [lines]);
 
-  const handleClear = useCallback(() => {
-    clearRouteLayers(layersRef.current);
-    setActiveLineKey('');
-    setLineStates({});
-    if (selectedStation) {
-      drawStationMarker(amapRef.current, mapRef.current, layersRef.current, selectedStation);
-    }
-  }, [selectedStation]);
-
   return (
     <main className="app-shell">
       <div className="map-stage" ref={mapContainerRef}>
@@ -259,7 +250,6 @@ export default function App() {
         onSelectStation={handleSelectStation}
         onSelectLine={handleSelectLine}
         onShowAll={handleShowAll}
-        onClear={handleClear}
       />
     </main>
   );

@@ -52,8 +52,8 @@ describe('createAmapTransitService', () => {
         path: '116.1,39.1;116.2,39.2',
       },
       stationInfo: [
-        { id: 'FAR', name: '远站', location: '116.50,39.90', buslines: [] },
-        { id: 'NEAR', name: '近站', location: '116.401,39.900', buslines: [] },
+        { id: 'FAR', name: '远站(公交站)', location: '116.50,39.90', buslines: [{ id: 'L1', name: '24路' }] },
+        { id: 'NEAR', name: '近站(公交站)', location: '116.401,39.900', buslines: [{ id: 'L2', name: '117路' }] },
       ],
     });
 

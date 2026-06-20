@@ -6,7 +6,7 @@ import type {
   ViaStop,
 } from '../types/transit';
 
-const NON_GROUND_BUS_KEYWORDS = ['地铁', '轻轨', '磁悬浮', '轮渡', '索道'];
+const NON_GROUND_BUS_KEYWORDS = ['地铁', '轻轨', '磁悬浮', '轮渡', '索道', '机场线'];
 
 const DEFAULT_LINE_COLORS = [
   '#0f766e',
@@ -98,7 +98,10 @@ export function normalizeStationsFromResult(result: unknown): StationCandidate[]
   const record = asRecord(result);
   const stationInfo = record.stationInfo ?? record.busstops ?? [];
   const stations = Array.isArray(stationInfo) ? stationInfo : [];
-  return stations.map(normalizeStation).filter((station) => station.name);
+  return stations
+    .map(normalizeStation)
+    .filter((station) => station.name && station.buslines.length > 0)
+    .sort(compareStationCandidatePriority);
 }
 
 export function readPoisFromResult(result: unknown): unknown[] {
@@ -233,6 +236,18 @@ export function dedupeStations(stations: StationCandidate[]): StationCandidate[]
   }
 
   return result;
+}
+
+function compareStationCandidatePriority(a: StationCandidate, b: StationCandidate): number {
+  return stationCandidateScore(b) - stationCandidateScore(a);
+}
+
+function stationCandidateScore(station: StationCandidate): number {
+  let score = station.buslines.length;
+  if (station.name.includes('公交站')) score += 1000;
+  if (station.name.includes('枢纽')) score += 300;
+  if (station.name.includes('地铁站') && !station.name.includes('公交站')) score -= 500;
+  return score;
 }
 
 function normalizeViaStops(value: unknown): ViaStop[] {

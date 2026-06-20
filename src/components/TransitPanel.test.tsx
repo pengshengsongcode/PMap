@@ -49,7 +49,6 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof TransitPanel
     onSelectStation: vi.fn(),
     onSelectLine: vi.fn(),
     onShowAll: vi.fn(),
-    onClear: vi.fn(),
     ...overrides,
   };
 
@@ -112,6 +111,7 @@ describe('TransitPanel', () => {
   it('exposes show-all action only when lines exist', () => {
     const { props, rerender } = renderPanel();
     expect(screen.getByRole('button', { name: /显示全部/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /清空|删除/ })).not.toBeInTheDocument();
 
     rerender(<TransitPanel {...props} selectedStation={stations[0]} lines={lines} />);
     const button = screen.getByRole('button', { name: /显示全部/ });
