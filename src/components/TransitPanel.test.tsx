@@ -43,9 +43,11 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof TransitPanel
     canLocate: true,
     locateState: 'idle',
     locateError: '',
+    theme: 'day',
     onQueryChange: vi.fn(),
     onSearch: vi.fn(),
     onLocate: vi.fn(),
+    onToggleTheme: vi.fn(),
     onSelectStation: vi.fn(),
     onSelectLine: vi.fn(),
     onShowAll: vi.fn(),
@@ -129,6 +131,21 @@ describe('TransitPanel', () => {
     expect(screen.getByText('定位权限被拒绝')).toBeInTheDocument();
   });
 
+  it('starts the mobile sheet in compact mode', () => {
+    renderPanel();
+    const panel = screen.getByLabelText('公交站牌线路查询') as HTMLElement;
+
+    expect(panel.style.getPropertyValue('--sheet-height')).toBe('18dvh');
+  });
+
+  it('toggles day and night mode from the panel header', () => {
+    const { props } = renderPanel();
+
+    fireEvent.click(screen.getByRole('button', { name: /切换夜间模式/ }));
+
+    expect(props.onToggleTheme).toHaveBeenCalledTimes(1);
+  });
+
   it('expands the mobile sheet with keyboard controls', () => {
     renderPanel();
     const panel = screen.getByLabelText('公交站牌线路查询') as HTMLElement;
@@ -149,5 +166,19 @@ describe('TransitPanel', () => {
     fireEvent.touchEnd(panel);
 
     expect(panel.style.getPropertyValue('--sheet-height')).toBe('18dvh');
+  });
+
+  it('collapses the sheet when showing all lines', () => {
+    const { props } = renderPanel({ selectedStation: stations[0], lines });
+    const panel = screen.getByLabelText('公交站牌线路查询') as HTMLElement;
+    const handle = screen.getByLabelText('上下拖拽面板');
+
+    fireEvent.keyDown(handle, { key: 'End' });
+    expect(panel.style.getPropertyValue('--sheet-height')).toBe('92dvh');
+
+    fireEvent.click(screen.getByRole('button', { name: /显示全部/ }));
+
+    expect(panel.style.getPropertyValue('--sheet-height')).toBe('18dvh');
+    expect(props.onShowAll).toHaveBeenCalledTimes(1);
   });
 });

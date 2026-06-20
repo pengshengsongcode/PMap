@@ -5,18 +5,23 @@ import {
   LocateFixed,
   LoaderCircle,
   MapPin,
+  Moon,
   Route,
   Search,
+  Sun,
 } from 'lucide-react';
 import { CSSProperties, FormEvent, KeyboardEvent, PointerEvent, TouchEvent, useRef, useState } from 'react';
 import { formatLineDirection, lineKey } from '../domain/transit';
 import type { AsyncState, BusLineSummary, LineLoadState, StationCandidate } from '../types/transit';
 
 const MOBILE_SHEET_MIN_HEIGHT = 16;
-const MOBILE_SHEET_DEFAULT_HEIGHT = 68;
+const MOBILE_SHEET_COMPACT_HEIGHT = 18;
+const MOBILE_SHEET_DEFAULT_HEIGHT = MOBILE_SHEET_COMPACT_HEIGHT;
 const MOBILE_SHEET_MAX_HEIGHT = 92;
-const MOBILE_SHEET_SNAP_POINTS = [18, 68, 92];
+const MOBILE_SHEET_SNAP_POINTS = [MOBILE_SHEET_COMPACT_HEIGHT, 68, 92];
 const SHEET_DRAG_THRESHOLD_PX = 8;
+
+export type MapTheme = 'day' | 'night';
 
 interface TransitPanelProps {
   city: string;
@@ -33,9 +38,11 @@ interface TransitPanelProps {
   canLocate: boolean;
   locateState: AsyncState;
   locateError: string;
+  theme: MapTheme;
   onQueryChange: (query: string) => void;
   onSearch: () => void;
   onLocate: () => void;
+  onToggleTheme: () => void;
   onSelectStation: (station: StationCandidate) => void;
   onSelectLine: (line: BusLineSummary) => void;
   onShowAll: () => void;
@@ -56,9 +63,11 @@ export function TransitPanel({
   canLocate,
   locateState,
   locateError,
+  theme,
   onQueryChange,
   onSearch,
   onLocate,
+  onToggleTheme,
   onSelectStation,
   onSelectLine,
   onShowAll,
@@ -84,6 +93,17 @@ export function TransitPanel({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (canSearch) onSearch();
+  }
+
+  function collapseSheet() {
+    setSheetHeight(MOBILE_SHEET_COMPACT_HEIGHT);
+    scrollAreaRef.current?.scrollTo?.({ top: 0 });
+  }
+
+  function handleShowAllClick() {
+    if (!canShowAll) return;
+    collapseSheet();
+    onShowAll();
   }
 
   function handlePanelPointerDown(event: PointerEvent<HTMLElement>) {
@@ -236,9 +256,20 @@ export function TransitPanel({
             <p className="eyebrow">PMap · {city}</p>
             <h1>公交直达</h1>
           </div>
-          <div className="route-counter" aria-label={`当前站点 ${lines.length} 条线路`}>
-            <strong>{lines.length}</strong>
-            <span>线路</span>
+          <div className="panel-actions">
+            <button
+              className="theme-toggle"
+              type="button"
+              onClick={onToggleTheme}
+              title={theme === 'day' ? '切换夜间模式' : '切换日间模式'}
+              aria-label={theme === 'day' ? '切换夜间模式' : '切换日间模式'}
+            >
+              {theme === 'day' ? <Moon size={17} /> : <Sun size={17} />}
+            </button>
+            <div className="route-counter" aria-label={`当前站点 ${lines.length} 条线路`}>
+              <strong>{lines.length}</strong>
+              <span>线路</span>
+            </div>
           </div>
         </div>
 
@@ -328,7 +359,13 @@ export function TransitPanel({
           </div>
 
           <div className="action-row">
-            <button className="show-all-button" type="button" onClick={onShowAll} disabled={!canShowAll} title="显示全部线路">
+            <button
+              className="show-all-button"
+              type="button"
+              onClick={handleShowAllClick}
+              disabled={!canShowAll}
+              title="显示全部线路"
+            >
               {isShowingAll ? <LoaderCircle className="spin" size={18} /> : <Layers size={18} />}
               <span>{isShowingAll ? '绘制中' : '显示全部'}</span>
               <small>{lines.length > 0 ? `${lines.length} 条线路` : '选择站点后可用'}</small>

@@ -25,6 +25,7 @@ export type AmapMap = {
   setFitView?: (overlays?: AmapOverlay[], immediately?: boolean, avoid?: number[]) => void;
   setCenter?: (center: unknown) => void;
   setZoom?: (zoom: number) => void;
+  setMapStyle?: (style: string) => void;
 };
 
 export type AmapOverlay = {

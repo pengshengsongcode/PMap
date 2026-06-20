@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NonGroundBusLineError, createAmapTransitService, type TransitSearchService } from './services/amapTransit';
 import { loadAmapJsApi } from './services/amapLoader';
-import { TransitPanel } from './components/TransitPanel';
+import { TransitPanel, type MapTheme } from './components/TransitPanel';
 import { lineKey, toLngLatTuple } from './domain/transit';
 import type { AmapGlobal, AmapMap, AmapOverlay } from './types/amap';
 import type {
@@ -21,6 +21,10 @@ const DEFAULT_CHINA_CENTER: LngLatTuple = [104.195397, 35.86166];
 const SHOW_ALL_LIMIT = 50;
 const SHOW_ALL_CONCURRENCY = 3;
 const NEARBY_STATION_RADIUS_METERS = 1500;
+const MAP_STYLE_BY_THEME: Record<MapTheme, string> = {
+  day: 'amap://styles/normal',
+  night: 'amap://styles/dark',
+};
 
 interface LayerStore {
   currentLocation: AmapOverlay | null;
@@ -35,7 +39,10 @@ export default function App() {
   const mapRef = useRef<AmapMap | null>(null);
   const serviceRef = useRef<TransitSearchService | null>(null);
   const layersRef = useRef<LayerStore>({ currentLocation: null, station: null, route: [], stops: [] });
+  const hasAutoLocatedRef = useRef(false);
 
+  const [theme, setTheme] = useState<MapTheme>('day');
+  const themeRef = useRef<MapTheme>(theme);
   const [query, setQuery] = useState('');
   const [searchState, setSearchState] = useState<AsyncState>('idle');
   const [searchError, setSearchError] = useState('');
@@ -68,7 +75,7 @@ export default function App() {
           center: DEFAULT_CHINA_CENTER,
           viewMode: '2D',
           resizeEnable: true,
-          mapStyle: 'amap://styles/darkblue',
+          mapStyle: MAP_STYLE_BY_THEME[themeRef.current],
         });
 
         if (amap.Scale) map.addControl?.(new amap.Scale());
@@ -92,6 +99,11 @@ export default function App() {
       amapRef.current = null;
     };
   }, [hasRequiredAmapConfig]);
+
+  useEffect(() => {
+    themeRef.current = theme;
+    mapRef.current?.setMapStyle?.(MAP_STYLE_BY_THEME[theme]);
+  }, [theme]);
 
   const handleSearch = useCallback(async () => {
     const keyword = query.trim();
@@ -173,6 +185,12 @@ export default function App() {
     }
   }, [hasRequiredAmapConfig]);
 
+  useEffect(() => {
+    if (!canLocate || hasAutoLocatedRef.current) return;
+    hasAutoLocatedRef.current = true;
+    void handleLocate();
+  }, [canLocate, handleLocate]);
+
   const handleSelectLine = useCallback(async (line: BusLineSummary) => {
     if (!serviceRef.current) return;
     const key = lineKey(line);
@@ -223,7 +241,7 @@ export default function App() {
   }, [lines]);
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell theme-${theme}`}>
       <div className="map-stage" ref={mapContainerRef}>
         {!hasRequiredAmapConfig && <MapOverlayMessage title="等待配置" message="填入高德 Key 和安全密钥后即可加载地图。" />}
         {mapState === 'loading' && <MapOverlayMessage title="加载地图" message="正在连接高德地图 JS API。" />}
@@ -244,9 +262,11 @@ export default function App() {
         canLocate={canLocate}
         locateState={locateState}
         locateError={locateError}
+        theme={theme}
         onQueryChange={setQuery}
         onSearch={handleSearch}
         onLocate={handleLocate}
+        onToggleTheme={() => setTheme((currentTheme) => (currentTheme === 'day' ? 'night' : 'day'))}
         onSelectStation={handleSelectStation}
         onSelectLine={handleSelectLine}
         onShowAll={handleShowAll}
@@ -316,11 +336,11 @@ function drawLineDetail(
     map,
     path: detail.path,
     strokeColor: detail.color,
-    strokeOpacity: options.emphasis ? 0.98 : 0.66,
-    strokeWeight: options.emphasis ? 9 : 5,
+    strokeOpacity: options.emphasis ? 0.96 : 0.68,
+    strokeWeight: options.emphasis ? 8 : 5,
     isOutline: true,
-    outlineColor: options.emphasis ? '#4eefff' : '#07101a',
-    borderWeight: options.emphasis ? 4 : 2,
+    outlineColor: '#ffffff',
+    borderWeight: options.emphasis ? 3 : 2,
     zIndex: options.emphasis ? 52 : 36,
   });
   layers.route.push(polyline);
@@ -362,15 +382,24 @@ function clearRouteLayers(layers: LayerStore) {
 function fitRouteView(map: AmapMap | null, layers: LayerStore) {
   const overlays = [...layers.route, ...layers.stops, ...(layers.station ? [layers.station] : [])];
   if (overlays.length > 0) {
-    map?.setFitView?.(overlays, false, [80, 420, 80, 80]);
+    map?.setFitView?.(overlays, false, getFitViewAvoid());
   }
 }
 
 function fitLocatedStationView(map: AmapMap | null, layers: LayerStore) {
   const overlays = [layers.currentLocation, layers.station].filter((overlay): overlay is AmapOverlay => Boolean(overlay));
   if (overlays.length > 0) {
-    map?.setFitView?.(overlays, false, [80, 420, 120, 80]);
+    map?.setFitView?.(overlays, false, getFitViewAvoid());
   }
+}
+
+function getFitViewAvoid(): number[] {
+  return isMobileLayout() ? [72, 24, 190, 24] : [80, 80, 80, 440];
+}
+
+function isMobileLayout(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia?.('(max-width: 720px)').matches ?? window.innerWidth <= 720;
 }
 
 function requestBrowserLocation(): Promise<LngLatTuple> {
