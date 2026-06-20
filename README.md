@@ -33,6 +33,22 @@ npm run build
 npm run preview
 ```
 
+## GitHub Pages
+
+当前仓库会通过 GitHub Actions 部署到：
+
+```text
+https://pengshengsongcode.github.io/PMap/
+```
+
+GitHub 仓库变量需要配置：
+
+```bash
+VITE_AMAP_KEY=...
+VITE_AMAP_SECURITY_JS_CODE=...
+VITE_AMAP_CITY=北京
+```
+
 ## 说明
 
 - 当前版本使用明文 `securityJsCode`，只适合本地和内测。
