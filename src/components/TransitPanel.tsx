@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   Bus,
+  ChevronRight,
   Layers,
   LocateFixed,
   LoaderCircle,
@@ -330,9 +331,14 @@ export function TransitPanel({
 
         {selectedStation && (
           <section className="current-station" aria-label="当前站点">
-            <span>当前站点</span>
-            <strong>{selectedStation.name}</strong>
-            <small>{lines.length} 条可直达线路</small>
+            <span className="station-icon" aria-hidden="true">
+              <Bus size={18} />
+            </span>
+            <div className="station-summary">
+              <span>当前站点</span>
+              <strong>{selectedStation.name}</strong>
+              <small>{lines.length} 条线路可直达</small>
+            </div>
           </section>
         )}
 
@@ -362,12 +368,11 @@ export function TransitPanel({
         )}
 
         <section className="panel-section route-section">
-          <div className="section-title">
-            <Bus size={16} />
-            <span>可直达线路</span>
-          </div>
-
-          <div className="action-row">
+          <div className="section-title route-title-row">
+            <span className="section-title-label">
+              <Bus size={16} />
+              <span>可直达线路</span>
+            </span>
             <button
               className="show-all-button"
               type="button"
@@ -410,6 +415,7 @@ export function TransitPanel({
                     <span className="line-badge">{line.name.replace(/[（(].*$/, '')}</span>
                     <span className="line-meta">{formatLineDirection(line)}</span>
                     <LineStateLabel state={state} message={lineStates[key]?.message} />
+                    <ChevronRight className="line-chevron" size={18} aria-hidden="true" />
                   </button>
                 );
               })}

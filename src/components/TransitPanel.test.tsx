@@ -110,6 +110,13 @@ describe('TransitPanel', () => {
     expect(props.onSelectLine).toHaveBeenCalledWith(lines[1]);
   });
 
+  it('keeps the selected station route count visible', () => {
+    renderPanel({ selectedStation: stations[0], lines });
+
+    expect(screen.getByText('当前站点')).toBeInTheDocument();
+    expect(screen.getByText('2 条线路可直达')).toBeInTheDocument();
+  });
+
   it('exposes show-all action only when lines exist', () => {
     const { props, rerender } = renderPanel();
     expect(screen.getByRole('button', { name: /显示全部/ })).toBeDisabled();
