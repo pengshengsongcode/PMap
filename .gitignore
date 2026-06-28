@@ -8,3 +8,9 @@ coverage
 *.log
 *.tsbuildinfo
 .netlify
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
